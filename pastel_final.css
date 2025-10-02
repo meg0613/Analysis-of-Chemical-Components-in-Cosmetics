@@ -1,0 +1,52 @@
+body {
+  background: #fdfdfd;
+  font-family: 'Helvetica Neue', sans-serif;
+}
+
+.navbar {
+  background: linear-gradient(to right, #f6d5f7, #cfd9df, #e0c3fc);
+  border: none;
+}
+
+.value-box {
+  border-radius: 12px !important;
+  font-weight: bold;
+}
+
+h1, h2, h3 {
+  color: #444;
+}
+
+.sidebar {
+  background-color: #f7f9fb;
+  padding: 15px;
+  border-right: 1px solid #ddd;
+}
+
+.kpi-card {
+  background: pink;
+  border-radius: 18px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  padding: 20px;
+  margin: 5px;
+  text-align: center;
+  height: 100px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.kpi-card h4 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: #555;
+}
+
+.kpi-card h2 {
+  margin: 0;
+  font-size: 28px;
+  font-weight: bold;
+  color: #222;
+}
+

@@ -1,0 +1,181 @@
+---
+title: "Cosmetics Analytics — Dashboard"
+author: "Meghna Chaturvedi"
+date: "`r Sys.Date()`"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    vertical_layout: scroll
+    theme: cosmo
+    css: pastel_final.css
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+
+library(tidyverse)
+library(flexdashboard)
+library(plotly)
+library(DT)
+library(Rtsne)
+library(wordcloud2)
+library(RColorBrewer)
+library(corrplot)
+library(treemapify)
+
+# Load data
+df <- read.csv("cosmetics.csv", stringsAsFactors = FALSE)
+
+# Rename Rank column
+names(df)[names(df) == "Rank"] <- "ProductRank"
+
+# Numeric conversions
+df$Price <- suppressWarnings(as.numeric(df$Price))
+df$ProductRank <- suppressWarnings(as.numeric(df$ProductRank))
+
+# Add IngredientCount
+df$IngredientCount <- sapply(strsplit(df$Ingredients, ","), length)
+
+```
+
+Sidebar {.sidebar}
+-----------------------------------------------------------------------
+
+### Filters
+
+```{r}
+selectInput("brand", "Filter by Brand:", choices = c("All", sort(unique(df$Brand))))
+sliderInput("price", "Price range:",
+            min(df$Price, na.rm=TRUE), max(df$Price, na.rm=TRUE),
+            value = c(min(df$Price, na.rm=TRUE), max(df$Price, na.rm=TRUE)))
+textInput("ingredient", "Ingredient contains:")
+selectInput("product", "Pick product:", choices = df$Name)
+
+filteredData <- reactive({
+  d <- df
+  if (input$brand != "All") d <- d %>% filter(Brand == input$brand)
+  d <- d %>% filter(Price >= input$price[1], Price <= input$price[2])
+  if (input$ingredient != "") {
+    d <- d %>% filter(grepl(input$ingredient, Ingredients, ignore.case=TRUE))
+  }
+  d
+})
+```
+
+Row {data-height=120}
+-----------------------------------------------------------------------
+
+### KPIs
+
+```{r}
+uiOutput("kpi_cards")
+
+output$kpi_cards <- renderUI({
+  d <- filteredData()
+  fluidRow(
+    column(3, div(class="kpi-card", h4("Total Products"), h2(nrow(d)))),
+    column(3, div(class="kpi-card", h4("Average Price ($)"), h2(round(mean(d$Price, na.rm=TRUE),2)))),
+    column(3, div(class="kpi-card", h4("Median Price ($)"), h2(round(median(d$Price, na.rm=TRUE),2)))),
+    column(3, div(class="kpi-card", h4("Average Rank"), h2(round(mean(d$ProductRank, na.rm=TRUE),1))))
+  )
+})
+```
+
+Row
+-----------------------------------------------------------------------
+
+### Brand Share
+
+```{r}
+renderPlotly({
+  d <- filteredData()
+  plot_ly(d %>% count(Brand, sort=TRUE) %>% top_n(15),
+          labels=~Brand, values=~n, type="pie") %>%
+    layout(title="Top 15 Brands Share")
+})
+```
+
+### Top Ingredients
+
+```{r}
+renderPlotly({
+  d <- filteredData() %>%
+    separate_rows(Ingredients, sep=",") %>%
+    count(Ingredients, sort=TRUE) %>%
+    top_n(15)
+  plot_ly(d, x=~n, y=~reorder(Ingredients,n), type="bar", orientation="h") %>%
+    layout(title="Top 15 Ingredients", xaxis=list(title="Count"), yaxis=list(title=""))
+})
+```
+
+Row
+-----------------------------------------------------------------------
+
+### Word Cloud
+
+```{r}
+ingredients <- df %>%
+  separate_rows(Ingredients, sep = ",") %>%
+  count(Ingredients, sort = TRUE)
+
+wordcloud2(data = ingredients,
+           size = 1,
+           color = "random-light",
+           backgroundColor = "white",
+           minRotation = -pi/6,
+           maxRotation = pi/6,
+           rotateRatio = 0.3)
+```
+
+### Correlation Heatmap
+```{r, fig.width=8, fig.height=6}
+num_vars <- df %>%
+  select(Price, ProductRank, IngredientCount)
+
+corr <- cor(num_vars, use = "complete.obs")
+
+corrplot(corr,
+         method = "color",
+         type = "upper",
+         addCoef.col = "black",
+         tl.col = "black",
+         tl.cex = 1.2,
+         number.cex = 1.2,
+         col = colorRampPalette(c("red","white","orange"))(200))
+```
+
+Row
+-----------------------------------------------------------------------
+
+### t-SNE Ingredient Similarity
+
+```{r}
+renderPlotly({
+  d <- filteredData()
+  d_tsne <- na.omit(d %>% select(Price, ProductRank, IngredientCount))
+  d_tsne <- d_tsne[!duplicated(d_tsne), ]
+  if (nrow(d_tsne) > 2) {
+    tsne <- Rtsne(as.matrix(scale(d_tsne)), dims=2, perplexity=10)
+    tsne_df <- data.frame(tsne$Y, Brand=d$Brand[1:nrow(d_tsne)])
+    plot_ly(tsne_df, x=~X1, y=~X2, color=~Brand, type="scatter", mode="markers") %>%
+      layout(title="t-SNE Ingredient Similarity")
+  }
+})
+```
+
+Row
+-----------------------------------------------------------------------
+
+### Data Explorer
+
+```{r}
+renderDataTable({
+  filteredData()
+}, extensions = 'Buttons',
+options = list(dom = 'Bfrtip',
+               buttons = c('copy','csv','excel','pdf'),
+               pageLength = 10,
+               scrollX = TRUE))
+```
+
